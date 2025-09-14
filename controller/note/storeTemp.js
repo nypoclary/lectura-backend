@@ -1,4 +1,4 @@
-import { r2, GetObjectCommand, PutObjectCommand } from "../../../r2.js";
+import { r2, PutObjectCommand, GetObjectCommand } from "../../lib/r2.js";
 import { v4 as uuidv4 } from 'uuid';
 import Ffmpeg from "fluent-ffmpeg";
 import fs from "fs";
