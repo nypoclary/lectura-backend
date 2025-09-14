@@ -16,7 +16,7 @@ export const login = async (req, res) => {
       [username]
     );
 
-    if (users.length < 1) {
+    if (users[0].length < 1) {
       return res.status(401).json({
         success: false,
         payload: "User does not exist",
@@ -37,6 +37,7 @@ export const login = async (req, res) => {
       .status(200)
       .json({ success: true, payload: "Login successful", token: token });
   } catch (error) {
+    console.log(error);
     return res.status(500).json({ success: false, payload: error.message });
   }
 };

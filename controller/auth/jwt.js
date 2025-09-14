@@ -15,6 +15,7 @@ export const generateToken = (id) => {
   return token;
 };
 
+//this is just middleware to check if the user is logged in
 export const checkAuth = (req, res, next) => {
   try {
     const token = req.cookies.token;
