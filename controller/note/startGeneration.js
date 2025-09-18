@@ -3,6 +3,7 @@ import { r2, PutObjectCommand, GetObjectCommand } from "../../lib/r2.js";
 import { v4 as uuidv4 } from "uuid";
 import dotenv from "dotenv";
 import fs from "fs";
+import full_note_flow from "../../lib/full_note_flow.js";
 dotenv.config();
 
 const streamToBuffer = async (stream) => {
@@ -58,6 +59,8 @@ const startGenerate = async (req, res) => {
         ContentType: "audio/mpeg",
       })
     );
+
+    full_note_flow(note.insertId);
 
     res.status(200).json({
       message: "MP3 file moved to temporary to storage",
