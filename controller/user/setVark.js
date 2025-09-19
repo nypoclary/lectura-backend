@@ -2,7 +2,7 @@ import database from "../../database/db.js";
 
 const setVark = async (req, res) => {
   const userId = req.user_id;
-  const vark_type = req.params;
+  const { vark_type } = req.params;
 
   try {
     const [row] = database.query(`UPDATE user SET vark_type = ? WHERE id = ?`, [
