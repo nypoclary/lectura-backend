@@ -21,8 +21,9 @@ const noteDetail = async (req, res) => {
         Key: explanationFilePath,
       })
     );
-    const originalFinalName = cleanFilename(note.originalFilePath.slice(17));
+    const originalFinalName = cleanFilename(note.originalFilePath.slice(49));
     const explanationText = await noteFile.transformToString();
+
     const noteResponse = {
       ...note,
       explanationText: explanationText,
@@ -44,4 +45,5 @@ function cleanFilename(filename) {
 
   return cleaned;
 }
+
 export default noteDetail;
