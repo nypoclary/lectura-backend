@@ -5,7 +5,7 @@ const history = async (req, res) => {
 
   try {
     const [row] = await database.query(
-      `SELECT name, id, created_at FROM note WHERE user_id = ?`,
+      `SELECT name, id, created_at FROM note WHERE user_id = ? ORDER BY created_at DESC`,
       [userId]
     );
 
