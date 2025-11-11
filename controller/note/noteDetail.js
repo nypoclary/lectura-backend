@@ -1,5 +1,6 @@
 import { r2, GetObjectCommand } from "../../lib/r2.js";
 import database from "../../database/db.js";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import dotenv from "dotenv";
 dotenv.config();
 const noteDetail = async (req, res) => {
@@ -14,6 +15,7 @@ const noteDetail = async (req, res) => {
     const note = row[0];
 
     const explanationFilePath = note.explanationFilePath;
+    const audioFilePath = note.audioFilePath;
 
     const { Body: noteFile } = await r2.send(
       new GetObjectCommand({
@@ -21,6 +23,21 @@ const noteDetail = async (req, res) => {
         Key: explanationFilePath,
       })
     );
+
+    // --- 2. Generate a Presigned URL for the Audio ---
+    let signedAudioUrl = null;
+    if (audioFilePath) {
+      const audioCommand = new GetObjectCommand({
+        Bucket: process.env.R2_BUCKET_NAME,
+        Key: audioFilePath,
+      });
+
+      // Create a signed URL that's valid for 1 hour (3600 seconds)
+      signedAudioUrl = await getSignedUrl(r2, audioCommand, {
+        expiresIn: 3600,
+      });
+    }
+
     const originalFinalName = cleanFilename(note.originalFilePath.slice(49));
     const explanationText = await noteFile.transformToString();
 
@@ -28,6 +45,7 @@ const noteDetail = async (req, res) => {
       ...note,
       explanationText: explanationText,
       originalFinalName: originalFinalName,
+      audioUrl: signedAudioUrl,
     };
     return res.status(200).json({ noteResponse: noteResponse });
   } catch (error) {
