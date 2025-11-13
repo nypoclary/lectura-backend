@@ -4,17 +4,12 @@ import { exec } from "child_process";
 import formidable from "formidable";
 import fs from "fs";
 import path from "path";
-// --- os.tmpdir() is no longer needed for output, but formidable might still use it
 import os from "os";
 
 const storeTemp = async (req, res) => {
   let responseHandled = false;
 
-  // --- 1. Define your project's temp directory ---
-  // path.resolve(process.cwd()) gets your project's root directory
   const tempDir = path.resolve(process.cwd(), "temp_uploads");
-
-  // --- 2. Ensure this directory exists ---
   try {
     if (!fs.existsSync(tempDir)) {
       fs.mkdirSync(tempDir, { recursive: true });
@@ -39,13 +34,33 @@ const storeTemp = async (req, res) => {
 
     const inputPath = file.filepath; // This is a temp path from formidable
     const outputName = `${uuidv4()}.mp3`;
-    // --- 3. Change output path to your new local temp folder ---
     const outputPath = path.join(tempDir, outputName);
 
-    console.log("Converting file to MP3:", inputPath);
+    // --- NEW LOGIC: CHECK FILE TYPE ---
+    const fileType = file.mimetype;
+
+    if (fileType === "audio/mpeg" || fileType === "audio/mp3") {
+      // --- IT'S ALREADY AN MP3! ---
+      console.log("File is already an MP3. Moving file...");
+
+      // Just move the file. This is an instant operation.
+      fs.rename(inputPath, outputPath, (moveErr) => {
+        if (moveErr) {
+          console.error("File move error:", moveErr);
+          return res.status(500).json({ error: "Failed to move file" });
+        }
+        console.log("File move complete:", outputPath);
+        res.json({ success: true, key: outputName });
+      });
+      // We are done. No ffmpeg needed.
+      return;
+    }
+
+    // --- IT'S A VIDEO (or other) FILE, so we run ffmpeg ---
+    // (This is your original code, which is correct for videos)
+    console.log("File is a video. Converting file to MP3:", inputPath);
     console.log("Output path:", outputPath);
 
-    // First, analyze the file
     exec(
       `ffmpeg -i "${inputPath}" -hide_banner`,
       (analyzeError, analyzeStdout, analyzeStderr) => {
@@ -56,7 +71,6 @@ const storeTemp = async (req, res) => {
           ? `ffmpeg -i "${inputPath}" -vn -ar 44100 -ac 2 -b:a 192k "${outputPath}"`
           : `ffmpeg -f lavfi -i anullsrc=r=44100:cl=stereo -t 1 -b:a 192k "${outputPath}"`;
 
-        // Execute the appropriate command
         exec(ffmpegCmd, async (error, stdout, stderr) => {
           if (error) {
             console.error("FFmpeg error:", error);
@@ -65,7 +79,6 @@ const storeTemp = async (req, res) => {
               responseHandled = true;
               res.status(500).json({ error: "FFmpeg conversion failed" });
             }
-            // Clean up formidable's input file
             try {
               if (fs.existsSync(inputPath)) fs.unlinkSync(inputPath);
             } catch (e) {
@@ -75,26 +88,16 @@ const storeTemp = async (req, res) => {
           }
 
           try {
-            // Check if output file was created
             if (!fs.existsSync(outputPath)) {
               throw new Error("Output file was not created");
             }
-
-            // --- 4. R2 UPLOAD LOGIC IS REMOVED ---
-            // We no longer read the file or upload it here.
-
-            // --- 5. Clean up ONLY the original input file ---
-            // We KEEP the new outputPath file
             try {
               if (fs.existsSync(inputPath)) fs.unlinkSync(inputPath);
             } catch (cleanupError) {
               console.error("Cleanup error (input file):", cleanupError);
             }
-
             if (!responseHandled) {
               responseHandled = true;
-              // --- 6. Send back the key (which is just the filename) ---
-              // This is now extremely fast.
               res.json({ success: true, key: outputName });
             }
           } catch (processError) {
@@ -105,8 +108,6 @@ const storeTemp = async (req, res) => {
                 .status(500)
                 .json({ error: processError.message || "Processing failed" });
             }
-
-            // Clean up all files on error
             try {
               if (fs.existsSync(inputPath)) fs.unlinkSync(inputPath);
               if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
