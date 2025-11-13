@@ -2,8 +2,6 @@ import database from "../../database/db.js";
 import { r2, PutObjectCommand, GetObjectCommand } from "../../lib/r2.js";
 import { v4 as uuidv4 } from "uuid";
 import dotenv from "dotenv";
-import fs from "fs"; // --- ADDED fs
-import path from "path"; // --- ADDED path
 import full_note_flow from "../../lib/full_note_flow.js";
 dotenv.config();
 
@@ -23,6 +21,7 @@ const regenerate = async (req, res) => {
   try {
     let fileName;
     let originalFilePath;
+    let buffer;
 
     if (key) {
       // ===== CASE 1: New file uploaded (like startGenerate) =====
@@ -35,24 +34,15 @@ const regenerate = async (req, res) => {
 
       originalFilePath = `originalFile/${uuidv4()}${fileName}`;
 
-      // --- THIS BLOCK IS UPDATED ---
-      // 1. Define the path to the local temp file
-      const tempDir = path.resolve(process.cwd(), "temp_uploads");
-      const localFilePath = path.join(tempDir, key);
+      const { Body: MP3file } = await r2.send(
+        new GetObjectCommand({
+          Bucket: process.env.R2_BUCKET_NAME,
+          Key: key,
+        })
+      );
+      buffer = await streamToBuffer(MP3file);
 
-      // 2. Check if the local file exists
-      if (!fs.existsSync(localFilePath)) {
-        console.error("Local temp file not found:", localFilePath);
-        return res.status(404).json({
-          message:
-            "File not found. Your session may have expired. Please re-upload.",
-        });
-      }
-
-      // 3. Read the file from the local temp folder
-      const buffer = fs.readFileSync(localFilePath);
-
-      // 4. Upload to new path in R2
+      // Upload to new path in R2
       await r2.send(
         new PutObjectCommand({
           Bucket: process.env.R2_BUCKET_NAME,
@@ -62,21 +52,13 @@ const regenerate = async (req, res) => {
         })
       );
 
-      // 5. Clean up the local temp file
-      try {
-        fs.unlinkSync(localFilePath);
-      } catch (cleanupError) {
-        console.error("Error cleaning up temp file:", cleanupError);
-      }
-      // --- END OF UPDATED BLOCK ---
-
       // Update DB with new file
       await database.query(
         `UPDATE note SET name = ?, originalFilePath = ?, created_at = NOW(), status = "pending" WHERE id = ? AND user_id = ?`,
         [fileName, originalFilePath, noteId, userId]
       );
     } else {
-      // ===== CASE 2: Reuse old file (This logic is correct) =====
+      // ===== CASE 2: Reuse old file =====
       const [rows] = await database.query(
         `SELECT name, originalFilePath FROM note WHERE id = ? AND user_id = ? LIMIT 1`,
         [noteId, userId]
@@ -85,6 +67,17 @@ const regenerate = async (req, res) => {
       if (!rows || rows.length === 0) {
         return res.status(404).json({ message: "Note not found" });
       }
+
+      fileName = rows[0].name;
+      originalFilePath = rows[0].originalFilePath;
+
+      const { Body: MP3file } = await r2.send(
+        new GetObjectCommand({
+          Bucket: process.env.R2_BUCKET_NAME,
+          Key: originalFilePath,
+        })
+      );
+      buffer = await streamToBuffer(MP3file);
 
       // Just mark status as pending again
       await database.query(
