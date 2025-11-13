@@ -2,7 +2,7 @@ import database from "../../database/db.js";
 import { r2, PutObjectCommand, GetObjectCommand } from "../../lib/r2.js";
 import { v4 as uuidv4 } from "uuid";
 import dotenv from "dotenv";
-import full_note_flow from "../../lib/full_note_flow.js";
+import full_note_flow from "../../lib/full_note_flow(old).js";
 dotenv.config();
 
 const streamToBuffer = async (stream) => {

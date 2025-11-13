@@ -5,7 +5,7 @@ import { v4 as uuidv4 } from "uuid";
 import dotenv from "dotenv";
 import fs from "fs"; // --- ADDED fs
 import path from "path"; // --- ADDED path
-import full_note_flow from "../../lib/full_note_flow.js";
+import full_note_flow from "../../lib/full_note_flow(old).js";
 dotenv.config();
 
 // --- streamToBuffer is no longer needed as we'll use readFileSync ---
