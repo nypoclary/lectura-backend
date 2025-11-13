@@ -11,7 +11,7 @@ app.use(express.json());
 
 app.use(
   cors({
-    origin: "https://lectura.minpainghein.com",
+    origin: "http://localhost:5173",
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
@@ -24,6 +24,6 @@ app.use(cookieParser());
 
 app.use("/api", mainRouter);
 
-app.listen(5000, "0.0.0.0" ,() => {
+app.listen(3000, "0.0.0.0" ,() => {
   console.log(`Server is running on port 5000`);
 });

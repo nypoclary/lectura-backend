@@ -1,28 +1,13 @@
-// --- REMOVED R2 IMPORTS ---
+import { r2, PutObjectCommand } from "../../lib/r2.js";
 import { v4 as uuidv4 } from "uuid";
 import { exec } from "child_process";
 import formidable from "formidable";
 import fs from "fs";
 import path from "path";
-// --- os.tmpdir() is no longer needed for output, but formidable might still use it
 import os from "os";
 
 const storeTemp = async (req, res) => {
   let responseHandled = false;
-
-  // --- 1. Define your project's temp directory ---
-  // path.resolve(process.cwd()) gets your project's root directory
-  const tempDir = path.resolve(process.cwd(), "temp_uploads");
-
-  // --- 2. Ensure this directory exists ---
-  try {
-    if (!fs.existsSync(tempDir)) {
-      fs.mkdirSync(tempDir, { recursive: true });
-    }
-  } catch (dirError) {
-    console.error("Failed to create temp directory:", dirError);
-    return res.status(500).json({ error: "Server configuration error" });
-  }
 
   const form = formidable({ multiples: false });
 
@@ -37,21 +22,22 @@ const storeTemp = async (req, res) => {
       return res.status(400).json({ error: "No file uploaded" });
     }
 
-    const inputPath = file.filepath; // This is a temp path from formidable
+    const inputPath = file.filepath;
     const outputName = `${uuidv4()}.mp3`;
-    // --- 3. Change output path to your new local temp folder ---
-    const outputPath = path.join(tempDir, outputName);
+    const outputPath = path.join(os.tmpdir(), outputName);
 
     console.log("Converting file to MP3:", inputPath);
     console.log("Output path:", outputPath);
 
-    // First, analyze the file
+    // First, analyze the file to check if it has an audio stream
     exec(
       `ffmpeg -i "${inputPath}" -hide_banner`,
       (analyzeError, analyzeStdout, analyzeStderr) => {
+        // Determine if we need to generate silent audio or extract existing audio
         const hasAudio =
           analyzeStderr.includes("Stream") && analyzeStderr.includes("Audio");
 
+        // Command for files with audio vs files without audio
         const ffmpegCmd = hasAudio
           ? `ffmpeg -i "${inputPath}" -vn -ar 44100 -ac 2 -b:a 192k "${outputPath}"`
           : `ffmpeg -f lavfi -i anullsrc=r=44100:cl=stereo -t 1 -b:a 192k "${outputPath}"`;
@@ -65,12 +51,16 @@ const storeTemp = async (req, res) => {
               responseHandled = true;
               res.status(500).json({ error: "FFmpeg conversion failed" });
             }
-            // Clean up formidable's input file
+
+            // Clean up input file
             try {
-              if (fs.existsSync(inputPath)) fs.unlinkSync(inputPath);
+              if (fs.existsSync(inputPath)) {
+                fs.unlinkSync(inputPath);
+              }
             } catch (e) {
               console.error("Cleanup error:", e);
             }
+
             return;
           }
 
@@ -80,21 +70,29 @@ const storeTemp = async (req, res) => {
               throw new Error("Output file was not created");
             }
 
-            // --- 4. R2 UPLOAD LOGIC IS REMOVED ---
-            // We no longer read the file or upload it here.
+            // Read the output file
+            const fileBuffer = fs.readFileSync(outputPath);
 
-            // --- 5. Clean up ONLY the original input file ---
-            // We KEEP the new outputPath file
+            // Upload to R2
+            await r2.send(
+              new PutObjectCommand({
+                Bucket: process.env.R2_BUCKET_NAME,
+                Key: outputName,
+                Body: fileBuffer,
+                ContentType: "audio/mpeg",
+              })
+            );
+
+            // Clean up files
             try {
               if (fs.existsSync(inputPath)) fs.unlinkSync(inputPath);
+              if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
             } catch (cleanupError) {
-              console.error("Cleanup error (input file):", cleanupError);
+              console.error("Cleanup error:", cleanupError);
             }
 
             if (!responseHandled) {
               responseHandled = true;
-              // --- 6. Send back the key (which is just the filename) ---
-              // This is now extremely fast.
               res.json({ success: true, key: outputName });
             }
           } catch (processError) {
@@ -106,7 +104,7 @@ const storeTemp = async (req, res) => {
                 .json({ error: processError.message || "Processing failed" });
             }
 
-            // Clean up all files on error
+            // Clean up files
             try {
               if (fs.existsSync(inputPath)) fs.unlinkSync(inputPath);
               if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
