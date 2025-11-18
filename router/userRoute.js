@@ -7,7 +7,7 @@ import update from "../controller/user/update.js";
 
 const userRouter = express.Router();
 
-userRouter.get("/vark/:vark_type", checkAuth, setVark);
+userRouter.put("/vark/:vark_type", checkAuth, setVark);
 userRouter.get("/info", checkAuth, userInfo);
 userRouter.get("/detail", checkAuth, userDetail);
 
